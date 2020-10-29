@@ -199,7 +199,9 @@ open class Request {
         guard let task = task else { delegate.queue.isSuspended = false ; return }
 
         if startTime == nil { startTime = CFAbsoluteTimeGetCurrent() }
-
+        
+        /// 开始任务, URLSession开始工作了,其会对代理方法进行回调,
+        /// 在alamofire中代理为SessionMananger,所以接下来的工作由sessionManager接管
         task.resume()
 
         NotificationCenter.default.post(

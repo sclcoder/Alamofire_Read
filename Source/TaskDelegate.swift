@@ -39,6 +39,7 @@ open class TaskDelegate: NSObject {
     /// The error generated throughout the lifecyle of the task.
     public var error: Error?
 
+    /// 语法: 计算属性(和存储属性区别 有赋值符合 ‘=’)
     var task: URLSessionTask? {
         set {
             taskLock.lock(); defer { taskLock.unlock() }
@@ -176,7 +177,7 @@ open class TaskDelegate: NSObject {
                     downloadDelegate.resumeData = resumeData
                 }
             }
-
+            /// 将处理代理任务的queue取消挂起, 使其开始工作。queue中的任务开始执行，如request的response回调
             queue.isSuspended = false
         }
     }
@@ -187,7 +188,7 @@ open class TaskDelegate: NSObject {
 class DataTaskDelegate: TaskDelegate, URLSessionDataDelegate {
 
     // MARK: Properties
-
+    // 语法: 这是只读计算属性的写法
     var dataTask: URLSessionDataTask { return task as! URLSessionDataTask }
 
     override var data: Data? {
@@ -294,7 +295,7 @@ class DataTaskDelegate: TaskDelegate, URLSessionDataDelegate {
         if let dataTaskWillCacheResponse = dataTaskWillCacheResponse {
             cachedResponse = dataTaskWillCacheResponse(session, dataTask, proposedResponse)
         }
-
+        /// 调用系统传递来的闭包,系统通过传递的参数决定是否缓存响应数据
         completionHandler(cachedResponse)
     }
 }

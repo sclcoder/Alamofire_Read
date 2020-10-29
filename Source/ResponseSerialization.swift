@@ -38,6 +38,7 @@ public protocol DataResponseSerializerProtocol {
 /// A generic `DataResponseSerializerType` used to serialize a request, response, and data into a serialized object.
 public struct DataResponseSerializer<Value>: DataResponseSerializerProtocol {
     /// The type of serialized object to be created by this `DataResponseSerializer`.
+    /// 序列化后的数据
     public typealias SerializedObject = Value
 
     /// A closure used by response handlers that takes a request, response, data and error and returns a result.
@@ -112,6 +113,7 @@ extension DataRequest {
     /// - returns: The request.
     @discardableResult
     public func response(queue: DispatchQueue? = nil, completionHandler: @escaping (DefaultDataResponse) -> Void) -> Self {
+        /// 将响应的回调添加到队列中, 但是队列默认是挂起的,当请求完成后,在代理的回调中会将队列启动,最终调用响应的回调completionHandler
         delegate.queue.addOperation {
             (queue ?? DispatchQueue.main).async {
                 var dataResponse = DefaultDataResponse(
@@ -123,7 +125,7 @@ extension DataRequest {
                 )
 
                 dataResponse.add(self.delegate.metrics)
-
+                /// 执行响应回调
                 completionHandler(dataResponse)
             }
         }
@@ -146,14 +148,16 @@ extension DataRequest {
         completionHandler: @escaping (DataResponse<T.SerializedObject>) -> Void)
         -> Self
     {
+        /// 和普通的response回调一样,添加到队列中等待处理。 当队列取消挂起时,队列会调度任务，便会执行该operation
         delegate.queue.addOperation {
+            /// 调用序列化器中存储的闭包,该闭包中会调用对应的序列化函数将数据序列化
             let result = responseSerializer.serializeResponse(
                 self.request,
                 self.response,
                 self.delegate.data,
                 self.delegate.error
             )
-
+            /// 构建序列化后的response
             var dataResponse = DataResponse<T.SerializedObject>(
                 request: self.request,
                 response: self.response,
@@ -163,7 +167,7 @@ extension DataRequest {
             )
 
             dataResponse.add(self.delegate.metrics)
-
+            /// 异步回调使用者的回调
             (queue ?? DispatchQueue.main).async { completionHandler(dataResponse) }
         }
 
@@ -488,18 +492,22 @@ extension Request {
         error: Error?)
         -> Result<Any>
     {
+        /// 响应出错了
         guard error == nil else { return .failure(error!) }
-
+        /// 响应中没有数据
         if let response = response, emptyDataStatusCodes.contains(response.statusCode) { return .success(NSNull()) }
-
+        
         guard let validData = data, validData.count > 0 else {
+            /// 空数据
             return .failure(AFError.responseSerializationFailed(reason: .inputDataNilOrZeroLength))
         }
 
         do {
+            /// 将响应数据序列化为json格式,并返回
             let json = try JSONSerialization.jsonObject(with: validData, options: options)
             return .success(json)
         } catch {
+            /// 序列化json时出错
             return .failure(AFError.responseSerializationFailed(reason: .jsonSerializationFailed(error: error)))
         }
     }
@@ -516,7 +524,15 @@ extension DataRequest {
         options: JSONSerialization.ReadingOptions = .allowFragments)
         -> DataResponseSerializer<Any>
     {
+        /// DataResponseSerializer原始的初始化方法
+//        return DataResponseSerializer(
+//            serializeResponse : {_, response, data, error in
+//            return Request.serializeResponseJSON(options: options, response: response, data: data, error: error)}
+//        );
+        /// DataResponseSerializer的简写方式,使用尾随闭包的方式简化初始化
+        /// DataResponseSerializer结构体接收一个闭包参数来初始化, 且该闭包的返回值是最终要的序列化后的数据
         return DataResponseSerializer { _, response, data, error in
+            /// 闭包中创建json数据序列化器
             return Request.serializeResponseJSON(options: options, response: response, data: data, error: error)
         }
     }

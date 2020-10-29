@@ -66,7 +66,16 @@ class MasterViewController: UITableViewController {
                 switch segue.identifier! {
                 case "GET":
                     detailViewController.segueIdentifier = "GET"
-                    return Alamofire.request("https://httpbin.org/get")
+                    return Alamofire.request("https://httpbin.org/get").response(completionHandler: { (_) in
+                        print("response")
+                    }).responseJSON(completionHandler: { (_) in
+                        print("responseJSON")
+                    }).responseData(completionHandler: { (_) in
+                        print("responseData")
+                    }).responseString(completionHandler: { (_) in
+                        print("responseString")
+                    })
+                    
                 case "POST":
                     detailViewController.segueIdentifier = "POST"
                     return Alamofire.request("https://httpbin.org/post", method: .post)

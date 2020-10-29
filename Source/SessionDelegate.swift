@@ -348,11 +348,35 @@ extension SessionDelegate: URLSessionTaskDelegate {
             taskDidReceiveChallengeWithCompletion?(session, task, challenge, completionHandler)
             return
         }
-
+        
+        
+        /**
+         关于可选项绑定:
+            1.可以使用可选项绑来判断可选项是否包含值
+            2.如果包含就自动解包，把值赋值一个临时的常量或变量，并返回ture,否则返回false
+         
+         针对以下代码的一开始的错误理解:
+            以为taskDidReceiveChallenge {...} 这是在执行函数,只不过是通过尾随闭包的方式
+         
+         正确理解:
+            1.taskDidReceiveChallenge是个可选项
+            2.if let taskDidReceiveChallenge = taskDidReceiveChallenge操作会将 taskDidReceiveChallenge?解包,如果其有值，将
+         值赋值给常量let taskDidReceiveChallenge, 而且返回true,既然返回true,那么就会执行条件语句中的代码{
+            let result = taskDidReceiveChallenge(session, task, challenge)
+            completionHandler(result.0, result.1)
+         }
+         其中的taskDidReceiveChallenge(session, task, challenge)指的是 let taskDidReceiveChallenge
+         
+            3.如果解包发现是nil,返回false不会执行条件语句
+         */
+        
+        /// 如果自定义处理，就走自定义处理，不然走alamofire中针对request级别的的默认实现,再不然走session级别的默认实现
         if let taskDidReceiveChallenge = taskDidReceiveChallenge {
             let result = taskDidReceiveChallenge(session, task, challenge)
             completionHandler(result.0, result.1)
         } else if let delegate = self[task]?.delegate {
+            // self[task]? 获取到request, request中有针对每个request(task)进行处理的delegate
+            // 将该request的回调转发给其对应的代理
             delegate.urlSession(
                 session,
                 task: task,
@@ -434,12 +458,15 @@ extension SessionDelegate: URLSessionTaskDelegate {
     /// - parameter task:    The task whose request finished transferring data.
     /// - parameter error:   If an error occurred, an error object indicating how the transfer failed, otherwise nil.
     open func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        
         /// Executed after it is determined that the request is not going to be retried
+        /// 最终完成任务的回调
         let completeTask: (URLSession, URLSessionTask, Error?) -> Void = { [weak self] session, task, error in
             guard let strongSelf = self else { return }
-
+            
+            /// 有设置自定义处理逻辑
             strongSelf.taskDidComplete?(session, task, error)
-
+            /// 代理处理
             strongSelf[task]?.delegate.urlSession(session, task: task, didCompleteWithError: error)
 
             var userInfo: [String: Any] = [Notification.Key.Task: task]
@@ -454,6 +481,7 @@ extension SessionDelegate: URLSessionTaskDelegate {
                 userInfo: userInfo
             )
 
+            /// 清空
             strongSelf[task] = nil
         }
 
@@ -474,9 +502,15 @@ extension SessionDelegate: URLSessionTaskDelegate {
 
         /// If an error occurred and the retrier is set, asynchronously ask the retrier if the request
         /// should be retried. Otherwise, complete the task by notifying the task delegate.
+        /// 如果出错了是否需要重试
         if let retrier = retrier, let error = error {
+            /// {...}是以尾随闭包的形式传递最后一个闭包参数:注意该闭包是个参数,此时并没有调用闭包
             retrier.should(sessionManager, retry: request, with: error) { [weak self] shouldRetry, timeDelay in
-                guard shouldRetry else { completeTask(session, task, error) ; return }
+                
+                guard shouldRetry else {
+                    /// 不需要重试，直接完成
+                    completeTask(session, task, error) ; return
+                }
 
                 DispatchQueue.utility.after(timeDelay) { [weak self] in
                     guard let strongSelf = self else { return }
@@ -492,6 +526,7 @@ extension SessionDelegate: URLSessionTaskDelegate {
                 }
             }
         } else {
+            /// 不需要重试，直接完成
             completeTask(session, task, error)
         }
     }
